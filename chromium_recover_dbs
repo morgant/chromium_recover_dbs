@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+while IFS= read -r line ; do
+  if [[ "$(basename "${line}")" =~ ^(.+)-journal$ ]] ; then
+    db="$(dirname "${line}")/${BASH_REMATCH[1]}"
+    printf "Checking '%s'... " "${db}"
+    result="$(sqlite3 "${db}" "PRAGMA integrity_check;")"
+    if [ "${result}" = "ok" ] ; then
+      printf "%s\n" "${result}"
+    else
+      date="$(date +%Y%m%d)"
+      printf "\n\tBacking up...\n"
+      cp "${db}" "${db}.${date}"
+      printf "\tRecovering...\n"
+      sqlite3 "${db}.${date}" ".dump" | sqlite3 "${db}.${date}.recovered"
+      if [ $? -eq 0 ] ; then
+        printf "\tReplacing...\n"
+        mv "${db}.${date}.recovered" "${db}"
+      fi
+    fi
+  fi
+done <<< "$(find "${HOME}/.config/chromium" -type f -iname "*-journal")"
